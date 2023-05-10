@@ -1,0 +1,16 @@
+sdk-version: 2.6.1
+name: EletronicHealthRecordV1
+source: daml
+version: 0.0.1
+#init-script: Main:setup
+parties:
+  - Medico
+  - Paciente
+  - clinicalExe
+dependencies:
+  - daml-prim
+  - daml-stdlib
+  - daml-script
+
+
+
