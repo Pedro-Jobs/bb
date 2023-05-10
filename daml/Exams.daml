@@ -1,0 +1,117 @@
+module Exams where
+import Daml.Script
+import DA.Date 
+
+type CreateExamRecordsId = ContractId CreateExamRecords
+type ExamRecordsId = ContractId ExamRecords
+
+-- definir data exame
+data Examedata = Examedata {
+    nameExam : [Text],
+    codeExam : [Text],
+    nameResult : [Text]
+} deriving (Eq, Show)
+
+-- proposal creat Bio Records
+template CreateExamRecords
+    with
+        clinicalExe : Party
+        patient : Party
+        --observador : Optional Party
+        dateExam : Date
+        namePatient : Text
+        exame : Examedata      
+        rejected : Bool
+
+    where
+        signatory clinicalExe
+        observer patient, clinicalExe
+
+        -- clinicalExe can propose Exame record
+        choice CreateExamRecordsPropose : CreateExamRecordsId
+            controller clinicalExe
+            do create this
+
+        -- Patient can reject record
+        choice CreateExamRecordsReject : CreateExamRecordsId
+            controller patient
+            do create this with
+                    rejected = True
+                
+        -- Patient can Accept record
+        choice CreateExamRecordsAccept : ExamRecordsId
+            controller patient
+            do create ExamRecords with
+                    clinicalExe = clinicalExe
+                    patient = patient
+                    observersPresc = []
+                    dateExam = dateExam
+                    namePatient = namePatient
+                    exame = exame
+
+-- save BioRecords
+template ExamRecords
+    with
+        clinicalExe : Party
+        patient : Party
+        dateExam : Date
+        observersPresc : [Party] 
+        namePatient : Text
+        exame : Examedata
+    where
+        signatory patient
+        observer clinicalExe
+
+
+
+
+
+setup : Script ExamRecordsId
+setup = script do
+
+    -- assing Medico and Paciente
+    clinicalExe1 <- allocateParty "Medico"
+    patient1 <- allocateParty "Paciente"
+    --curioso1 <- allocateParty "Curioso"
+
+
+-- Doctor 1 proposes Bio Record
+    --doctor1 propose a Bio Records
+    clinicalExamRecord1 <- submit clinicalExe1 do 
+        createCmd CreateExamRecords with
+            clinicalExe = clinicalExe1
+            patient = patient1
+            dateExam = date 2023 Mar 22
+            --observadorBio = observador
+            namePatient = "Jonny Maradona"
+            exame = Examedata {
+                    nameExam = ["VGM","HGM"],
+                    codeExam = ["2ad","3ad"],
+                    nameResult = ["85","28,6"]
+                }
+            rejected = False
+
+    --patient1 reject the register Bio Record
+    patientRejectsxamRecord1 <- submit patient1 do
+        exerciseCmd clinicalExamRecord1 CreateExamRecordsReject
+
+
+    --doctor1 propose again Bio Record
+    clinicalExamRecord2 <- submit clinicalExe1 do 
+        createCmd CreateExamRecords with
+            clinicalExe = clinicalExe1
+            patient = patient1
+            dateExam = date 2023 Mar 22
+            --observadorBio = observador
+            namePatient = "Jonny Maradona"
+            exame = Examedata {
+                    nameExam = ["VGM","HGM"],
+                    codeExam = ["2ad","3ad"],
+                    nameResult = ["85","28,6"]
+                }
+            rejected = False
+
+
+    -- patient1 accepts the Bio Record
+    submit patient1 do
+        exerciseCmd clinicalExamRecord2 CreateExamRecordsAccept

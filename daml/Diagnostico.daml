@@ -1,0 +1,172 @@
+module Diagnostico where
+import Daml.Script
+import DA.Date
+
+
+
+type CreateEHRId = ContractId CreateEHR
+type DiagnoseRecordId = ContractId DiagnoseRecord
+
+-- proposal creat Health Record
+template CreateEHR
+    with
+        doctor : Party
+        patient : Party
+        --observador : Optional Party
+        dateRecord : Date
+        --IDs
+        namePatient : Text
+        nrIdNational : Text
+        nameDoctor : Text
+        ndIdDoctor : Text
+        diagnoses : Text
+        noteDoc : Text
+        tratamento : Text
+        notePat : Text
+        rejected : Bool
+    where
+        signatory doctor
+        observer patient
+
+        -- doctor propose record
+        choice CreateEHRPropose : CreateEHRId
+            controller doctor
+            do create this
+
+        -- Patient can reject record
+        choice CreateEHR_Reject : ()
+            with
+                feedback : Text
+            controller patient
+            do 
+                create this with
+                    notePat = feedback
+                    rejected = True
+                return ()
+                
+        -- Patient can Accept record
+        choice CreateEHR_Accept : DiagnoseRecordId
+            with
+                observadorz : Optional Party
+            controller patient
+            do create DiagnoseRecord with
+                  doctorAut = doctor
+                  patientAut = patient
+                  observadorAut = observadorz
+                  dateRecordAut = dateRecord
+                  --Id´s
+                  namePatientAut = namePatient
+                  nrIdNationalAut = nrIdNational
+                  nameDoctorAut = nameDoctor
+                  ndIdDoctorAut = ndIdDoctor
+                  --diagnoses
+                  diagnosesAut = diagnoses
+                  tratamentoAut = tratamento
+                  noteAut = noteDoc
+        
+
+        
+
+-- save EHRecord
+template DiagnoseRecord
+    with
+        doctorAut : Party
+        patientAut : Party
+        observadorAut : Optional Party
+
+        dateRecordAut : Date
+        namePatientAut : Text
+        nrIdNationalAut : Text
+        nameDoctorAut : Text
+        ndIdDoctorAut : Text
+        diagnosesAut: Text
+        tratamentoAut : Text
+        noteAut : Text
+        
+    where
+        signatory patientAut
+        observer doctorAut
+
+        key patientAut : Party
+        maintainer key
+
+        nonconsuming choice ArchiveDiagnoseRecord
+            : ()
+            with
+                diagnoseRecordCid : DiagnoseRecordId
+            controller patientAut
+            do
+                archive diagnoseRecordCid
+
+
+
+
+
+        
+
+                    
+
+        
+
+setup : Script DiagnoseRecordId
+setup = script do
+    -- assing Medico and Paciente
+    doctor1 <- allocateParty "Medico"
+    patient1 <- allocateParty "Paciente"
+    curioso1 <- allocateParty "Curioso"
+
+
+    --doctor1 propose a Diagnoses
+    doctorDiagnoses1 <- submit doctor1 do 
+        createCmd CreateEHR with
+            doctor = doctor1
+            patient = patient1
+            --observador = None
+            dateRecord = date 2023 Apr 03
+            namePatient = "Rui Antonio"
+            nrIdNational = "343243223 vfd"
+            nameDoctor = "Dr. Carlitos, o curandeiro"
+            ndIdDoctor = "656732hdbf"
+
+            diagnoses = "O Paciente tem asma."
+            noteDoc = "Precisas de tratamento"
+            tratamento = "medicação por 3 meses de anabolizantes"
+            notePat = "Nil" --inicialmente vazio
+            rejected = False
+
+    --patient1 reject the register diagnoses
+    patientRejectsDiagnoses1 <- submit patient1 do
+        exerciseCmd doctorDiagnoses1 CreateEHR_Reject
+            with
+                feedback = "É a life, não vou tratar de nada.."
+
+
+    --doctor1 propose again Diagnoses
+    doctorDiagnoses2 <- submit doctor1 do 
+        createCmd CreateEHR with
+            doctor = doctor1
+            patient = patient1
+            --observador = None
+            dateRecord = date 2023 Apr 03
+            namePatient = "Rui Antonio"
+            nrIdNational = "343243223 vfd"
+            nameDoctor = "Dr. Carlitos, o curandeiro"
+            ndIdDoctor = "656732hdbf"
+
+            diagnoses = "O paciente tem asma, e se nao etrar em tratamento tem um ano de vida."
+            noteDoc = "Precisas de tratamento, e de prescrição médica"
+            tratamento = "medicação por 3 meses de anabolizantes"
+            notePat = "nil"
+            rejected = False
+
+
+    -- patient1 accepts the Diagnoses
+    submit patient1 do
+        exerciseCmd doctorDiagnoses2 CreateEHR_Accept
+            with
+                observadorz = Some curioso1
+
+    
+
+
+

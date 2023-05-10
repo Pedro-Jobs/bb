@@ -1,0 +1,127 @@
+module Biorecord where
+import Daml.Script
+import DA.Date 
+
+type CreateBioRecordsId = ContractId CreateBioRecords
+type BioRecordsId = ContractId BioRecords
+
+-- proposal creat Bio Records
+template CreateBioRecords
+    with
+        doctor : Party
+        patient : Party
+        --observador : Optional Party
+        dateRecord : Date
+        name : Text
+        dateOfBirth : Date
+        weightKg : Int
+        heightCm : Int
+        heartRate : Int
+        hightBloodPressure : Int
+        lowBloodPressure : Int
+        rejected : Bool
+
+    where
+        signatory doctor
+        observer doctor, patient
+
+        -- Patient can propose Bio record
+        choice CreateBioRecordsPropose : CreateBioRecordsId
+            controller doctor
+            do create this
+
+        -- Patient can reject record
+        choice CreateBioRecordsReject : CreateBioRecordsId
+            controller patient
+            do create this with
+                    rejected = True
+                
+        -- Patient can Accept record
+        choice CreateBioRecordsAccept : BioRecordsId
+            controller patient
+            do create BioRecords with
+                    doctorBio = doctor
+                    patientBio = patient
+                    dateBio = dateRecord
+                    observersPresc = []
+                    nameBio = name
+                    dateOfBirthBio = dateOfBirth
+                    weightKgBio = weightKg
+                    heightCmBio = heightCm
+                    heartRateBio = heartRate
+                    hightBloodPressureBio = hightBloodPressure
+                    lowBloodPressureBio = lowBloodPressure
+
+-- save BioRecords
+template BioRecords
+    with
+        doctorBio : Party
+        patientBio : Party
+        dateBio : Date
+        observersPresc : [Party]
+        nameBio : Text
+        dateOfBirthBio : Date
+        weightKgBio : Int
+        heightCmBio : Int
+        heartRateBio : Int
+        hightBloodPressureBio : Int
+        lowBloodPressureBio : Int
+    where
+        signatory patientBio
+        observer doctorBio
+
+
+
+
+
+setup : Script BioRecordsId
+setup = script do
+
+    -- assing Medico and Paciente
+    doctor1 <- allocateParty "Medico"
+    patient1 <- allocateParty "Paciente"
+    --curioso1 <- allocateParty "Curioso"
+
+
+-- Doctor 1 proposes Bio Record
+    --doctor1 propose a Bio Records
+    doctorBioRecord1 <- submit doctor1 do 
+        createCmd CreateBioRecords with
+            doctor = doctor1
+            patient = patient1
+            dateRecord = date 2023 Mar 22
+            --observadorBio = observador
+            name = "Jonny Maradona"
+            dateOfBirth = date 1998 Jan 22
+            weightKg = 80
+            heightCm = 175
+            heartRate = 60
+            hightBloodPressure = 120
+            lowBloodPressure = 80
+            rejected = False
+
+    --patient1 reject the register Bio Record
+    patientRejectsBioRecord1 <- submit patient1 do
+        exerciseCmd doctorBioRecord1 CreateBioRecordsReject
+
+
+    --doctor1 propose again Bio Record
+    doctorBioRecord2 <- submit doctor1 do 
+        createCmd CreateBioRecords with
+            doctor = doctor1
+            patient = patient1
+            dateRecord = date 2023 Mar 22
+            --observadorBio = observador
+            name = "Jonny Maradona"
+            dateOfBirth = date 1988 Jan 22
+            weightKg = 90
+            heightCm = 175
+            heartRate = 60
+            hightBloodPressure = 120
+            lowBloodPressure = 80
+            rejected = False
+
+
+    -- patient1 accepts the Bio Record
+    submit patient1 do
+        exerciseCmd doctorBioRecord2 CreateBioRecordsAccept
