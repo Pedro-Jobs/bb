@@ -214,6 +214,9 @@ setup = script do
     patientRejectsExamRecord1 <- submit patient do
         exerciseCmd clinicalExamRecord1 CreateExamRecordsReject
 
+    --archive first proposal Exam
+    submit clinicalExe1 do
+        exerciseCmd patientRejectsExamRecord1 Archive
 
     --clinicalExe propose again Bio Record
     clinicalExamRecord2 <- submit clinicalExe1 do 
