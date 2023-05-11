@@ -1,0 +1,16 @@
+module Main where
+
+import Daml.Script
+import DA.Assert
+import DA.Optional
+import DA.Date
+import Biorecord
+import Diagnostico
+import Exams
+import PrecMeds
+
+
+
+
+
+
