@@ -1,0 +1,305 @@
+module Biorecord where
+
+import Daml.Script
+import DA.Assert
+import DA.Optional
+import DA.Date
+
+type CreateBioRecordsId = ContractId CreateBioRecords
+type BioRecordsId = ContractId BioRecords
+type BioRecordKey = (Party, Date)
+
+-- proposal creat Bio Records
+template CreateBioRecords
+    with
+        doctor : Party
+        patient : Party
+        dateRecord : Date
+        namePatient : Text
+        nrIdNational : Text
+        nameDoctor : Text
+        ndIdDoctor : Text
+        nrUtente : Int
+        dateOfBirth : Date
+        weightKg : Int
+        heightCm : Int
+        heartRate : Int
+        hightBloodPressure : Int
+        lowBloodPressure : Int
+        rejected : Bool
+
+    where
+        signatory doctor
+        observer doctor, patient
+
+        -- Medico can propose Bio record
+        choice CreateBioRecordsPropose : CreateBioRecordsId
+            controller doctor
+            do create this
+
+        -- Patient can reject record
+        choice CreateBioRecordsReject : CreateBioRecordsId
+            controller patient
+            do create this with
+                    rejected = True
+                
+        -- Patient can Accept record
+        choice CreateBioRecordsAccept : BioRecordsId
+            controller patient
+            do create BioRecords with
+                    doctorBio = doctor
+                    patientBio = patient
+                    observersBio = []
+                    namePatientBio = namePatient
+                    nrIdNationalBio = nrIdNational
+                    nameDoctorBio = nameDoctor
+                    ndIdDoctorBio = ndIdDoctor
+                    nrUtenteBio = nrUtente
+                    dateBio = dateRecord
+                    dateOfBirthBio = dateOfBirth
+                    weightKgBio = weightKg
+                    heightCmBio = heightCm
+                    heartRateBio = heartRate
+                    hightBloodPressureBio = hightBloodPressure
+                    lowBloodPressureBio = lowBloodPressure
+
+-- save BioRecords
+template BioRecords
+    with
+        doctorBio : Party
+        patientBio : Party
+        observersBio : [Party]
+        namePatientBio : Text
+        nrIdNationalBio : Text
+        nameDoctorBio : Text
+        ndIdDoctorBio : Text
+        nrUtenteBio : Int
+        dateBio : Date
+        dateOfBirthBio : Date
+        weightKgBio : Int
+        heightCmBio : Int
+        heartRateBio : Int
+        hightBloodPressureBio : Int
+        lowBloodPressureBio : Int
+    where
+        signatory patientBio
+        observer doctorBio, observersBio
+
+        choice AddDelegation : BioRecordsId
+          with
+          newobs : Party
+            controller patientBio
+            do
+              create this with
+                observersBio = newobs :: observersBio
+        key (patientBio,dateBio) : BioRecordKey
+        maintainer key._1
+
+
+template Delegation
+  with
+    sig : Party
+    delegees : [Party]
+  where
+    signatory sig
+    observer delegees
+
+    choice AddDelegees : ContractId Delegation
+      with 
+        newObs : Party
+      controller sig
+        do
+          create this with delegees = newObs :: delegees
+    
+
+    nonconsuming choice UnkeyedFetch
+      : BioRecords
+      with
+        cid : BioRecordsId
+        delegee : Party
+      controller delegee
+      do
+        fetch cid
+
+    nonconsuming choice VisibleKeyed
+      : Bool
+      with
+        key : BioRecordKey
+        delegee : Party
+      controller delegee
+      do
+        visibleByKey @BioRecords key
+
+    nonconsuming choice LookupKeyed
+      : Optional (BioRecordsId)
+      with
+        lookupKey : BioRecordKey
+        delegee : Party
+      controller delegee
+      do
+        lookupByKey @BioRecords lookupKey
+
+    nonconsuming choice FetchKeyed
+      : (BioRecordsId, BioRecords)
+      with
+        lookupKey : BioRecordKey
+        delegee : Party
+      controller delegee
+      do
+        fetchByKey @BioRecords lookupKey
+
+
+template Helper
+  with
+    p : Party
+  where
+    signatory p
+
+    choice FetchByKey : (BioRecordsId, BioRecords)
+      with
+        keyedKey : BioRecordKey
+      controller p
+      do fetchByKey @BioRecords keyedKey
+
+    choice VisibleByKey : Bool
+      with
+        keyedKey : BioRecordKey
+      controller p
+      do visibleByKey @BioRecords keyedKey
+
+    choice LookupByKey : (Optional (BioRecordsId))
+      with
+        keyedKey : BioRecordKey
+      controller p
+      do lookupByKey @BioRecords keyedKey
+
+    choice AssertNotVisibleKeyed : ()
+      with
+        delegationCid : ContractId Delegation
+        delegee : Party
+        key : BioRecordKey
+      controller p
+      do
+        b <- exercise delegationCid VisibleKeyed with
+          delegee
+          key
+        assert $ not b
+
+    choice AssertLookupKeyedIsNone : ()
+      with
+        delegationCid : ContractId Delegation
+        delegee : Party
+        lookupKey : BioRecordKey
+      controller p
+      do
+        b <- exercise delegationCid LookupKeyed with
+          delegee
+          lookupKey
+        assert $ isNone b
+
+    choice AssertFetchKeyedEqExpected : ()
+      with
+        delegationCid : ContractId Delegation
+        delegee : Party
+        lookupKey : BioRecordKey
+        expectedCid : BioRecordsId
+      controller p
+      do
+        (cid, keyed) <- exercise delegationCid FetchKeyed with
+          delegee
+          lookupKey
+        cid === expectedCid
+
+
+
+
+setup : Script ()
+setup = script do
+
+    -- assing Medico and Paciente
+    doctor1 <- allocateParty "Medico"-- Doc
+    patient <- allocateParty "Paciente"-- Doc
+    doctor2 <- allocateParty "Medico2" -- Doc
+    seguradora <- allocateParty "Seguradora" --seguradora
+
+
+-- Doctor 1 proposes Bio Record
+    --doctor1 propose a Bio Records with dateOfBirth incorrect
+    doctorBioRecord1 <- submit doctor1 do 
+        createCmd CreateBioRecords with
+            doctor = doctor1
+            patient = patient
+            namePatient = "José Gomes"
+            nrIdNational = "123231 bdfs"
+            nameDoctor = "André Gonçalves"
+            ndIdDoctor = "2131231 bdff"
+            nrUtente = 3422182212
+            dateRecord = date 2023 Mar 22
+            dateOfBirth = date 1998 Jan 22
+            weightKg = 80
+            heightCm = 175
+            heartRate = 60
+            hightBloodPressure = 120
+            lowBloodPressure = 80
+            rejected = False
+
+    --patient1 reject the register Bio Record
+    patientRejectsBioRecord1 <- submit patient do
+        exerciseCmd doctorBioRecord1 CreateBioRecordsReject
+
+      --archive first proposal presc
+    submit doctor1 do
+        exerciseCmd patientRejectsBioRecord1 Archive
+
+    --doctor1 propose again Bio Record
+    doctorBioRecord2 <- submit doctor1 do 
+        createCmd CreateBioRecords with
+            doctor = doctor1
+            patient = patient
+            namePatient = "José Gomes"
+            nrIdNational = "123231 bdfs"
+            nameDoctor = "André Gonçalves"
+            ndIdDoctor = "2131231 bdff"
+            nrUtente = 3422182212
+            dateRecord = date 2023 Mar 22
+            dateOfBirth = date 1988 Jan 22
+            weightKg = 90
+            heightCm = 175
+            heartRate = 60
+            hightBloodPressure = 120
+            lowBloodPressure = 80
+            rejected = False
+
+    -- Accept the second Bio Record and create a Bio Record record 
+    keyedCid0 <- submit patient do
+        exerciseCmd doctorBioRecord2 CreateBioRecordsAccept
+
+      -- patient adds doctor2 prescription record 
+    keyedCid <- submit patient do
+        exerciseCmd keyedCid0 AddDelegation with
+            newobs = doctor2
+
+    -- patient set doctor2 as delegation 
+    sigDelegationCid <- submit patient do
+        createCmd Delegation with
+            sig = patient
+            delegees = [doctor2]
+
+     -- Stakeholder doctor2 can fetch prescription record
+    (cid, l) <- submit doctor2 do
+        Helper doctor2 `createAndExerciseCmd` FetchByKey (patient,date 2023 Mar 22)
+    keyedCid === cid
+
+    ---- Stakeholder doctor2 can see the prescription record with authorization
+    b <- submit doctor2 do
+        exerciseCmd sigDelegationCid VisibleKeyed with
+            delegee = doctor2
+            key = (patient,date 2023 Mar 22)
+    assert b
+
+
+  --archive patient1
+    submit patient do
+        exerciseCmd sigDelegationCid Archive
+    
+

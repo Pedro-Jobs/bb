@@ -1,0 +1,285 @@
+module Exams where
+import Daml.Script
+import DA.Assert
+import DA.Optional
+import DA.Date
+
+type CreateExamRecordsId = ContractId CreateExamRecords
+type ExamRecordsId = ContractId ExamRecords
+type ExameKey = (Party, Date)
+-- definir data exame
+data Examedata = Examedata {
+    nameExam : [Text],
+    codeExam : [Text],
+    nameResult : [Text]
+} deriving (Eq, Show)
+
+-- proposal creat ExamRecords
+template CreateExamRecords
+    with
+        clinicalExe : Party
+        patient : Party
+        dateExam : Date
+        namePatient : Text
+        nrIdNational : Text
+        nameClinic : Text
+        ndIdClinic : Text
+        nrUtente : Int
+        exame : Examedata      
+        rejected : Bool
+
+    where
+        signatory clinicalExe
+        observer patient, clinicalExe
+
+        -- clinicalExe can propose Exame record
+        choice CreateExamRecordsPropose : CreateExamRecordsId
+            controller clinicalExe
+            do create this
+
+        -- Patient can reject record
+        choice CreateExamRecordsReject : CreateExamRecordsId
+            controller patient
+            do create this with
+                    rejected = True
+                
+        -- Patient can Accept record
+        choice CreateExamRecordsAccept : ExamRecordsId
+            controller patient
+            do create ExamRecords with
+                    clinicalExe = clinicalExe
+                    patientExa = patient
+                    observersExe = []
+                    dateExam = dateExam
+                    namePatient = namePatient
+                    nrIdNationalPatient = nrIdNational
+                    nameClinic = nameClinic
+                    ndIdClinic = ndIdClinic
+                    nrUtente = nrUtente
+                    exame = exame
+
+
+-- save BioRecords
+template ExamRecords
+    with
+        clinicalExe : Party
+        patientExa : Party
+        observersExe : [Party]
+        dateExam : Date 
+        namePatient : Text
+        nrIdNationalPatient : Text
+        nameClinic : Text
+        ndIdClinic : Text
+        nrUtente : Int
+        exame : Examedata
+    where
+        signatory patientExa
+        observer clinicalExe, observersExe 
+
+        choice AddDelegation : ExamRecordsId
+          with
+          newobs : Party
+            controller patientExa
+            do
+              create this with
+                observersExe = newobs :: observersExe
+        key (patientExa,dateExam) : ExameKey
+        maintainer key._1
+
+template Delegation
+  with
+    sig : Party
+    delegees : [Party]
+  where
+    signatory sig
+    observer delegees
+
+    choice AddDelegees : ContractId Delegation
+      with 
+        newObs : Party
+      controller sig
+        do
+          create this with delegees = newObs :: delegees
+    
+
+    nonconsuming choice UnkeyedFetch
+      : ExamRecords
+      with
+        cid : ExamRecordsId
+        delegee : Party
+      controller delegee
+      do
+        fetch cid
+
+    nonconsuming choice VisibleKeyed
+      : Bool
+      with
+        key : ExameKey
+        delegee : Party
+      controller delegee
+      do
+        visibleByKey @ExamRecords key
+
+    nonconsuming choice LookupKeyed
+      : Optional (ExamRecordsId)
+      with
+        lookupKey : ExameKey
+        delegee : Party
+      controller delegee
+      do
+        lookupByKey @ExamRecords lookupKey
+
+    nonconsuming choice FetchKeyed
+      : (ExamRecordsId, ExamRecords)
+      with
+        lookupKey : ExameKey
+        delegee : Party
+      controller delegee
+      do
+        fetchByKey @ExamRecords lookupKey
+
+
+template Helper
+  with
+    p : Party
+  where
+    signatory p
+
+    choice FetchByKey : (ExamRecordsId, ExamRecords)
+      with
+        keyedKey : ExameKey
+      controller p
+      do fetchByKey @ExamRecords keyedKey
+
+    choice VisibleByKey : Bool
+      with
+        keyedKey : ExameKey
+      controller p
+      do visibleByKey @ExamRecords keyedKey
+
+    choice LookupByKey : (Optional (ExamRecordsId))
+      with
+        keyedKey : ExameKey
+      controller p
+      do lookupByKey @ExamRecords keyedKey
+
+    choice AssertNotVisibleKeyed : ()
+      with
+        delegationCid : ContractId Delegation
+        delegee : Party
+        key : ExameKey
+      controller p
+      do
+        b <- exercise delegationCid VisibleKeyed with
+          delegee
+          key
+        assert $ not b
+
+    choice AssertLookupKeyedIsNone : ()
+      with
+        delegationCid : ContractId Delegation
+        delegee : Party
+        lookupKey : ExameKey
+      controller p
+      do
+        b <- exercise delegationCid LookupKeyed with
+          delegee
+          lookupKey
+        assert $ isNone b
+
+    choice AssertFetchKeyedEqExpected : ()
+      with
+        delegationCid : ContractId Delegation
+        delegee : Party
+        lookupKey : ExameKey
+        expectedCid : ExamRecordsId
+      controller p
+      do
+        (cid, keyed) <- exercise delegationCid FetchKeyed with
+          delegee
+          lookupKey
+        cid === expectedCid
+
+setup : Script ()
+setup = script do
+
+    -- assing Medico and Paciente
+    clinicalExe1 <- allocateParty "Clinico"
+    patient <- allocateParty "Paciente"
+    doctor1 <- allocateParty "Medico"-- Doc
+
+
+    --clinicalExe propose a clinicalExe
+    clinicalExamRecord1 <- submit clinicalExe1 do 
+        createCmd CreateExamRecords with
+            clinicalExe = clinicalExe1
+            patient = patient
+            dateExam = date 2023 Mar 22
+            namePatient = "Jonny Maradona"
+            nrIdNational = "123231 bdfs"
+            nrUtente = 3422182212
+            nameClinic = "Jorge Andrade"
+            ndIdClinic = "23123 dsfs"
+            exame = Examedata {
+                    nameExam = ["VGM","HGM"],
+                    codeExam = ["2ad","3ad"],
+                    nameResult = ["85","28,6"]
+                }
+            rejected = False
+
+    --patient1 reject the register Exame
+    patientRejectsExamRecord1 <- submit patient do
+        exerciseCmd clinicalExamRecord1 CreateExamRecordsReject
+
+  --archive first proposal Exam
+    submit clinicalExe1 do
+      exerciseCmd patientRejectsExamRecord1 Archive
+
+    --clinicalExe propose again Bio Record
+    clinicalExamRecord2 <- submit clinicalExe1 do 
+        createCmd CreateExamRecords with
+            clinicalExe = clinicalExe1
+            patient = patient
+            dateExam = date 2023 Mar 22
+            namePatient = "Jonny Maradona"
+            nrIdNational = "123231 bdfs"
+            nrUtente = 3422182212
+            nameClinic = "Jorge Andrade"
+            ndIdClinic = "23123 dsfs"
+            exame = Examedata {
+                    nameExam = ["VGM","HGM"],
+                    codeExam = ["2ad","3ad"],
+                    nameResult = ["85","28,6"]
+                }
+            rejected = False
+
+    -- Accept the second Exam Record and create a Bio Exam record 
+    keyedCid0 <- submit patient do
+        exerciseCmd clinicalExamRecord2 CreateExamRecordsAccept
+
+    -- patient adds doctor2 prescription record 
+    keyedCid <- submit patient do
+        exerciseCmd keyedCid0 AddDelegation with
+            newobs = doctor1
+
+    -- patient set doctor2 as delegation 
+    sigDelegationCid <- submit patient do
+        createCmd Delegation with
+            sig = patient
+            delegees = [doctor1]
+    
+     -- Stakeholder doctor2 can fetch prescription record
+    (cid, l) <- submit doctor1 do
+        Helper doctor1 `createAndExerciseCmd` FetchByKey (patient,date 2023 Mar 22)
+    keyedCid === cid
+
+    ---- Stakeholder doctor2 can see the prescription record with authorization
+    b <- submit doctor1 do
+        exerciseCmd sigDelegationCid VisibleKeyed with
+            delegee = doctor1
+            key = (patient,date 2023 Mar 22)
+    assert b
+
+      --archive patient1
+    submit patient do
+        exerciseCmd sigDelegationCid Archive
