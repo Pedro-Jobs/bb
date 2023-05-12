@@ -1,0 +1,370 @@
+module Main where
+
+import Daml.Script
+import DA.Assert
+import DA.Date
+import Biorecord
+import Diagnostico
+import Exams
+import PrecMeds
+
+mainteste : Script ()
+mainteste = script do
+
+    patient <- allocateParty "Paciente" -- Signatory
+    doctor1 <- allocateParty "Medico-1" -- Doc
+    doctor2 <- allocateParty "Medico-2" -- Doc
+    pharma <- allocateParty "Farmaceutico"
+    clinicalExe1 <- allocateParty "Clinico-Lab"
+
+--- Doctor first appointment --- Bio Record --- Diagnoses1 --- prescription Exame by doc1
+    --doctor1 propose a Bio Records with dateOfBirth incorrect
+    doctorBioRecord1 <- submit doctor1 do 
+        createCmd CreateBioRecords with
+            doctor = doctor1
+            patient = patient
+            namePatient = "Rui Alberto António"
+            nrIdNational = "123231 bdfs"
+            nameDoctor = "Dr. Carlos"
+            ndIdDoctor = "2131231 bdff"
+            nrUtente = 3422182212
+            dateRecord = date 2023 May 10
+            dateOfBirth = date 1988 Jan 22
+            weightKg = 100
+            heightCm = 180
+            heartRate = 60
+            hightBloodPressure = 120
+            lowBloodPressure = 80
+            rejected = False
+
+    -- Accept the second Bio Record and create a Bio Record record 
+    keyedCidBio1 <- submit patient do
+        exerciseCmd doctorBioRecord1 CreateBioRecordsAccept
+
+    --doctor1 propose a Diagnoses
+    doctorDiagnoses1 <- submit doctor1 do 
+        createCmd CreateDiagnose with
+            doctor = doctor1
+            patient = patient
+            dateRecord = date 2023 May 10
+            namePatient = "Rui Alberto António"
+            nrIdNational = "343243223 vfd"
+            nameDoctor = "Dr. Carlos."
+            ndIdDoctor = "656732hdbf"
+            nrUtente = 3422182212
+            diagnoses = "O Paciente tem asma, necessita de efetuar exames, e ir ao médico da especialidade pneumologia."
+            codeDiagnoses = "5434 sds"
+            noteDoc = "Necessita de tratamento. Precisa de efetuar uns exames, antes de ser visto pelo médico da especialidade.."
+            tratamento = "Por determinar."
+            notePat = "Nil" --inicialmente vazio
+            rejected = False
+
+    --patient1 reject the register diagnoses
+    patientRejectsDiagnoses1 <- submit patient do
+        exerciseCmd doctorDiagnoses1 CreateDiagnose_Reject
+            with
+                feedback = "Penso que não seja assim tão grave, de momento não tenho tempo para tratamentos."
+
+    --archive first proposal Diagnose
+    submit doctor1 do
+        exerciseCmd patientRejectsDiagnoses1 Archive
+
+    --doctor1 propose second Diagnoses
+    doctorDiagnoses2 <- submit doctor1 do 
+        createCmd CreateDiagnose with
+            doctor = doctor1
+            patient = patient
+            dateRecord = date 2023 May 10
+            namePatient = "Rui Alberto António"
+            nrIdNational = "343243223 vfd"
+            nameDoctor = "Dr. Carlos"
+            ndIdDoctor = "656732hdbf"
+            nrUtente = 3422182212
+            diagnoses = "O paciente tem asma, é imperativo que seja observado por um médico pneumologista."
+            codeDiagnoses = "5434 sds"
+            noteDoc = "Necessita de tratamento. Precisa de efetuar uns exames ao sangue, antes de ser visto pelo médico da especialidade."
+            tratamento = "Por determinar."
+            notePat = "nil"
+            rejected = False
+
+
+    -- Accept the second Diagnoses and create a Diagnoses_01 record 
+    keyedCidDiag2 <- submit patient do
+        exerciseCmd doctorDiagnoses2 CreateDiagnose_Accept
+      
+    --doctor1 propose a Prescri_Exame_01
+    doctorPrescRecord1 <- submit doctor1 do 
+        createCmd CreatePrescriMedsRecords with
+            doctor = doctor1
+            patient = patient
+            datePresc = date 2023 May 10
+            dateLimit = date 2024 May 10
+            namePatient = "Rui Alberto António"
+            nrIdNational = "343243223 vfd"
+            nameDoctor = "Dr. Carlos."
+            ndIdDoctor = "656732hdbf"
+            nrUtente = 3422182212
+            namePresc = "Blood-VGM,HGM"
+            codePresc = "2132BLOOD"  
+            rejected = False  
+
+    -- Patient Accept the second presc and create a prescription record Exame
+    keyedPrescExam1 <- submit patient do
+        exerciseCmd doctorPrescRecord1 CreatePrescriMedsRecordsAccept
+
+    -- patient adds clinicalExe1 prescription record 
+    keyedPrescExam11 <- submit patient do
+        exerciseCmd keyedPrescExam1 PrecMeds.AddDelegation with
+            newobs = clinicalExe1
+
+    -- patient set clinicalExe1 as delegation 
+    sigDelegationPrecsExameCid <- submit patient do
+        createCmd PrecMeds.Delegation with
+            sig = patient
+            delegees = [clinicalExe1]
+
+    -- Stakeholder clinicalExe1 can fetch prescription record
+    (cidPresc1, lPresc1) <- submit clinicalExe1 do
+        PrecMeds.Helper clinicalExe1 `createAndExerciseCmd` PrecMeds.FetchByKey (patient,date 2023 May 10)
+    keyedPrescExam11 === cidPresc1
+
+    -- Stakeholder clinicalExe1 can see the prescription record with authorization
+    b <- submit clinicalExe1 do
+        exerciseCmd sigDelegationPrecsExameCid PrecMeds.VisibleKeyed with
+            delegee = clinicalExe1
+            key = (patient,date 2023 May 10)
+    assert b
+
+    --clinicalExe propose a clinicalExe
+    clinicalExamRecord1 <- submit clinicalExe1 do 
+        createCmd CreateExamRecords with
+            clinicalExe = clinicalExe1
+            patient = patient
+            dateExam = date 2023 May 12
+            namePatient = "Rui Alberto António"
+            nrIdNational = "123231 bdfs"
+            nrUtente = 3422182212
+            nameClinic = "Jorge Andrade"
+            ndIdClinic = "23123 dsfs"
+            exame = Examedata {
+                    nameExam = ["VGM","HGM"],
+                    codeExam = ["2ad","3ad"],
+                    nameResult = ["85","28,6"]
+                }
+            rejected = False
+
+    -- patient Accept the Exam Record
+    keyedExamRecord1 <- submit patient do
+        exerciseCmd clinicalExamRecord1 CreateExamRecordsAccept
+
+    -- clinicalExe1 archive the prescription 
+    submit clinicalExe1 do
+        exerciseCmd sigDelegationPrecsExameCid ArchiveKeyed with
+            delegee = clinicalExe1
+            keyedCid = keyedPrescExam11
+
+    --archive Exame delegation
+    submit patient do
+        exerciseCmd sigDelegationPrecsExameCid Archive
+
+
+----- Patient goes to doc2 and shows (exameRecord,Biorecord, Diagnoses1)
+
+-------disclose Exam results
+    -- patient adds doctor2 Exames record 
+    clinicalExamRecord2 <- submit patient do
+        exerciseCmd keyedExamRecord1 Exams.AddDelegation with
+            newobs = doctor2
+
+    -- patient set doctor2 as delegation to see diagnoses and exames
+    sigDelegationExameCid <- submit patient do
+        createCmd Exams.Delegation with
+            sig = patient
+            delegees = [doctor2]
+
+     -- Stakeholder doctor2 can fetch Exame record
+    (cidEx, lEx) <- submit doctor2 do
+        Exams.Helper doctor2 `createAndExerciseCmd` Exams.FetchByKey (patient,date 2023 May 12)
+    clinicalExamRecord2 === cidEx
+
+    ---- Stakeholder doctor2 can see the Exame record with authorization
+    b <- submit doctor2 do
+        exerciseCmd sigDelegationExameCid Exams.VisibleKeyed with
+            delegee = doctor2
+            key = (patient,date 2023 May 12)
+    assert b
+
+------- disclose diagnose1 from doc1
+    -- patient adds doctor2 diagnose1 record 
+    keyedCidDiag22 <- submit patient do
+        exerciseCmd keyedCidDiag2 Diagnostico.AddDelegation with
+            newobs = doctor2
+
+    -- patient set doctor2 as delegation to see diagnoses1 and exames
+    sigDelegationDiagid <- submit patient do
+        createCmd Diagnostico.Delegation with
+            sig = patient
+            delegees = [doctor2]
+
+     -- Stakeholder doctor2 can fetch diagnose1 record
+    (cidDiag, lDiag) <- submit doctor2 do
+        Diagnostico.Helper doctor2 `createAndExerciseCmd` Diagnostico.FetchByKey (patient,date 2023 May 10)
+    keyedCidDiag22 === cidDiag
+
+    ---- Stakeholder doctor2 can see the diagnose1 with authorization
+    b <- submit doctor2 do
+        exerciseCmd sigDelegationDiagid Diagnostico.VisibleKeyed with
+            delegee = doctor2
+            key = (patient,date 2023 May 10)
+    assert b
+
+-------disclose Biorecords
+    -- patient adds doctor2 Biorecords 
+    keyedCidBio12 <- submit patient do
+        exerciseCmd keyedCidBio1 Biorecord.AddDelegation with
+            newobs = doctor2
+
+    -- patient set doctor2 as delegation to see Biorecords and exames
+    sigDelegationBioRecordid <- submit patient do
+        createCmd Biorecord.Delegation with
+            sig = patient
+            delegees = [doctor2]
+
+     -- Stakeholder doctor2 can fetch Biorecords
+    (cidBio, lBio) <- submit doctor2 do
+        Biorecord.Helper doctor2 `createAndExerciseCmd` Biorecord.FetchByKey (patient,date 2023 May 10)
+    keyedCidBio12 === cidBio
+
+    ---- Stakeholder doctor2 can see the Biorecords with authorization
+    b <- submit doctor2 do
+        exerciseCmd sigDelegationBioRecordid Biorecord.VisibleKeyed with
+            delegee = doctor2
+            key = (patient,date 2023 May 10)
+    assert b
+
+--- Diagnoses from doctor2
+    --doctor2 propose a Diagnoses
+    doctorDiagnoses3 <- submit doctor2 do 
+        createCmd CreateDiagnose with
+            doctor = doctor2
+            patient = patient
+            dateRecord = date 2023 May 15
+            namePatient = "Rui Alberto António"
+            nrIdNational = "343243223 vfd"
+            nameDoctor = "Dr. Joana"
+            ndIdDoctor = "12321 dsfs"
+            nrUtente = 3422182212
+            diagnoses = "O Paciente tem asma."
+            codeDiagnoses = "5434 sds"
+            noteDoc = "O Paciente apresenta dificuldades a respirar."
+            tratamento = "Medicação Budesonida 160/4,5 µg 2x/dia."
+            notePat = "Nil" --inicialmente vazio
+            rejected = False
+
+    keyedCidDiag3 <- submit patient do
+        exerciseCmd doctorDiagnoses3 CreateDiagnose_Accept
+
+    --doctor2 propose a Prescri_Meds_01
+    doctorPrescRecord3 <- submit doctor2 do 
+        createCmd CreatePrescriMedsRecords with
+            doctor = doctor2
+            patient = patient
+            datePresc = date 2023 May 15
+            dateLimit = date 2024 May 15
+            namePatient = "Rui Alberto António"
+            nrIdNational = "343243223 vfd"
+            nameDoctor = "Dr. Joana"
+            ndIdDoctor = "12321 dsfs"
+            nrUtente = 3422182212
+            namePresc = "Budesonida 160/4,5"
+            codePresc = "21232 dsf"  
+            rejected = False  
+
+    -- Patient Accept the prescription and create a prescription record Exame
+    keyedPrescPrecsMed1 <- submit patient do
+        exerciseCmd doctorPrescRecord3 CreatePrescriMedsRecordsAccept
+
+-------Patiente goes to pharmacy
+    -- patient adds pharma prescription record 
+    keyedPrescPrecsMed11 <- submit patient do
+        exerciseCmd keyedPrescPrecsMed1 PrecMeds.AddDelegation with
+            newobs = pharma
+
+    -- patient set pharma as delegation 
+    sigDelegationPrecsMedsid <- submit patient do
+        createCmd PrecMeds.Delegation with
+            sig = patient
+            delegees = [pharma]
+
+    -- Stakeholder pharma can fetch prescription record
+    (cidPresc2, lPresc2) <- submit pharma do
+        PrecMeds.Helper pharma `createAndExerciseCmd` PrecMeds.FetchByKey (patient,date 2023 May 15)
+    keyedPrescPrecsMed11 === cidPresc2
+
+    -- Stakeholder pharma can see the prescription record with authorization
+    b <- submit pharma do
+        exerciseCmd sigDelegationPrecsMedsid PrecMeds.VisibleKeyed with
+            delegee = pharma
+            key = (patient,date 2023 May 15)
+    assert b
+
+    -- pharma can archive the prescription 
+    submit pharma do
+        exerciseCmd sigDelegationPrecsMedsid ArchiveKeyed with
+            delegee = pharma
+            keyedCid = keyedPrescPrecsMed11
+
+    --archive delegation
+    submit patient do
+        exerciseCmd sigDelegationPrecsMedsid Archive
+
+    --archive delegation
+    submit patient do
+        exerciseCmd sigDelegationBioRecordid Archive
+
+    --archive delegation
+    submit patient do
+        exerciseCmd sigDelegationExameCid Archive
+
+
+
+    
+
+    
+    
+
+    
+
+
+
+    
+
+
+
+
+
+
+
+    
+    
+
+
+    
+
+
+
+    
+
+
+
+
+
+
+  
+
+
+
+
+
+
+
