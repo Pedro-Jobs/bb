@@ -325,6 +325,10 @@ mainteste = script do
     --archive delegation
     submit patient do
         exerciseCmd sigDelegationExameCid Archive
+        
+    --archive delegation diagnostico
+    submit patient do
+        exerciseCmd sigDelegationDiagid Archive
 
 
 
