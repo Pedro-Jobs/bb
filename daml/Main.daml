@@ -24,7 +24,7 @@ mainteste = script do
             doctor = doctor1
             patient = patient
             namePatient = "Rui Alberto António"
-            nrIdNational = "123231 bdfs"
+            nrIdNational = "343243223 vdf"
             nameDoctor = "Dr. Carlos"
             ndIdDoctor = "2131231 bdff"
             nrUtente = 3422182212
@@ -63,7 +63,7 @@ mainteste = script do
     patientRejectsDiagnoses1 <- submit patient do
         exerciseCmd doctorDiagnoses1 CreateDiagnose_Reject
             with
-                feedback = "Penso que não seja assim tão grave, de momento não tenho tempo para tratamentos."
+                feedback = "O número de Id nacional está errado, o correto é 343243223 vdf."
 
     --archive first proposal Diagnose
     submit doctor1 do
@@ -76,7 +76,7 @@ mainteste = script do
             patient = patient
             dateRecord = date 2023 May 10
             namePatient = "Rui Alberto António"
-            nrIdNational = "343243223 vfd"
+            nrIdNational = "343243223 vdf"
             nameDoctor = "Dr. Carlos"
             ndIdDoctor = "656732hdbf"
             nrUtente = 3422182212
@@ -100,7 +100,7 @@ mainteste = script do
             datePresc = date 2023 May 10
             dateLimit = date 2024 May 10
             namePatient = "Rui Alberto António"
-            nrIdNational = "343243223 vfd"
+            nrIdNational = "343243223 vdf"
             nameDoctor = "Dr. Carlos."
             ndIdDoctor = "656732hdbf"
             nrUtente = 3422182212
@@ -142,7 +142,7 @@ mainteste = script do
             patient = patient
             dateExam = date 2023 May 12
             namePatient = "Rui Alberto António"
-            nrIdNational = "123231 bdfs"
+            nrIdNational = "343243223 vdf"
             nrUtente = 3422182212
             nameClinic = "Jorge Andrade"
             ndIdClinic = "23123 dsfs"
@@ -250,7 +250,7 @@ mainteste = script do
             patient = patient
             dateRecord = date 2023 May 15
             namePatient = "Rui Alberto António"
-            nrIdNational = "343243223 vfd"
+            nrIdNational = "343243223 vdf"
             nameDoctor = "Dr. Joana"
             ndIdDoctor = "12321 dsfs"
             nrUtente = 3422182212
@@ -272,7 +272,7 @@ mainteste = script do
             datePresc = date 2023 May 15
             dateLimit = date 2024 May 15
             namePatient = "Rui Alberto António"
-            nrIdNational = "343243223 vfd"
+            nrIdNational = "343243223 vdf"
             nameDoctor = "Dr. Joana"
             ndIdDoctor = "12321 dsfs"
             nrUtente = 3422182212
